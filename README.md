@@ -37,12 +37,10 @@ You can track devices by their MAC addresses and assign friendly nicknames and c
 For any Linux computer on your LAN (Raspberry Pi, Ubuntu, Debian, CentOS, etc):
 
 ```bash
-git clone https://github.com/yourusername/whos-home.git
+git clone https://github.com/talyerushalmy/whos-home.git
 cd whos-home
 sudo ./install.sh
 ```
-
-> **Note**: Replace `yourusername` with the actual GitHub username when publishing.
 
 
 
@@ -80,7 +78,7 @@ sudo dnf install python3 python3-pip git sqlite iputils net-tools arping
 
 1. Clone and setup:
 ```bash
-git clone https://github.com/yourusername/whos-home.git
+git clone https://github.com/talyerushalmy/whos-home.git
 cd whos-home
 python3 -m venv venv
 source venv/bin/activate
@@ -103,13 +101,11 @@ python app.py
 
 ### Environment Variables
 
-Create a `.env` file or set environment variables:
+Create a `.env` file from the example:
 
-```env
-SECRET_KEY=your-secret-key-here
-HOST=0.0.0.0
-PORT=5000
-DATABASE_PATH=data/whos_home.db
+```bash
+cp env.example .env
+# Edit .env and change the SECRET_KEY to a secure random value
 ```
 
 ### Discovery Settings
