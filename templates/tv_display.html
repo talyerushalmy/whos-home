@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Who's Home - TV Display</title>
+    
+    <!-- Socket.IO -->
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .header {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 20px;
+            text-align: center;
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .header h1 {
+            color: white;
+            font-size: 3rem;
+            font-weight: 300;
+            margin-bottom: 10px;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+        
+        .header .subtitle {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 1.2rem;
+            font-weight: 300;
+        }
+        
+        .main-display {
+            flex: 1;
+            display: flex;
+            padding: 20px;
+            gap: 20px;
+            align-items: stretch;
+        }
+        
+        .person-column {
+            flex: 1;
+            border-radius: 20px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            transition: all 0.5s ease;
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .person-column::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: inherit;
+            opacity: 0.9;
+            z-index: 1;
+        }
+        
+        .person-content {
+            position: relative;
+            z-index: 2;
+            text-align: center;
+            padding: 40px;
+        }
+        
+        .person-icon {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 30px;
+            font-size: 4rem;
+            backdrop-filter: blur(10px);
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+        
+        .person-name {
+            font-size: 2.5rem;
+            font-weight: 600;
+            margin-bottom: 15px;
+            text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+            word-wrap: break-word;
+            max-width: 100%;
+        }
+        
+        .person-status {
+            font-size: 1.4rem;
+            font-weight: 300;
+            opacity: 0.9;
+            text-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+        }
+        
+        .person-last-seen {
+            font-size: 1rem;
+            margin-top: 15px;
+            opacity: 0.7;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+        }
+        
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+            color: rgba(255, 255, 255, 0.6);
+            text-align: center;
+            padding: 40px;
+        }
+        
+        .empty-state .icon {
+            font-size: 6rem;
+            margin-bottom: 30px;
+            opacity: 0.4;
+        }
+        
+        .empty-state h2 {
+            font-size: 2.5rem;
+            font-weight: 300;
+            margin-bottom: 20px;
+        }
+        
+        .empty-state p {
+            font-size: 1.5rem;
+            font-weight: 300;
+            line-height: 1.6;
+        }
+        
+        .footer {
+            background: rgba(0, 0, 0, 0.1);
+            padding: 15px 20px;
+            text-align: center;
+            backdrop-filter: blur(10px);
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .footer .last-update {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 1rem;
+            font-weight: 300;
+        }
+        
+        /* Text color adaptation based on background */
+        .light-text {
+            color: white !important;
+        }
+        
+        .dark-text {
+            color: #333 !important;
+        }
+        
+        /* Responsive design for different screen sizes */
+        @media (max-width: 1200px) {
+            .person-name { font-size: 2rem; }
+            .person-status { font-size: 1.2rem; }
+            .person-icon { width: 100px; height: 100px; font-size: 3rem; }
+        }
+        
+        @media (max-width: 800px) {
+            .main-display { flex-direction: column; }
+            .person-column { min-height: 200px; }
+            .person-name { font-size: 1.8rem; }
+            .header h1 { font-size: 2.5rem; }
+        }
+        
+        /* Animation for new person appearing */
+        .person-column.animate-in {
+            animation: slideIn 0.5s ease-out;
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🏠 Who's Home</h1>
+        <div class="subtitle" id="subtitle">Loading...</div>
+    </div>
+    
+    <div class="main-display" id="mainDisplay">
+        <!-- Dynamic content will be populated here -->
+    </div>
+    
+    <div class="footer">
+        <div class="last-update" id="lastUpdate">Last updated: Never</div>
+    </div>
+
+    <script>
+        // Global variables
+        let socket;
+        let devices = [];
+        let lastDisplayState = null; // Track last display state to avoid unnecessary re-renders
+        
+        // Initialize Socket.IO connection
+        function initializeSocket() {
+            socket = io();
+            
+            socket.on('connect', function() {
+                console.log('Connected to server');
+                loadDevices();
+            });
+            
+            socket.on('disconnect', function() {
+                console.log('Disconnected from server');
+            });
+            
+            socket.on('device_updates', function(data) {
+                updateDevices(data.devices);
+            });
+        }
+        
+        // Load devices from API
+        function loadDevices() {
+            fetch('/api/devices')
+                .then(response => response.json())
+                .then(data => {
+                    devices = data.devices;
+                    const wasUpdated = renderDisplay();
+                    if (wasUpdated) {
+                        updateLastUpdate();
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading devices:', error);
+                });
+        }
+        
+        // Update devices from real-time updates
+        function updateDevices(updatedDevices) {
+            updatedDevices.forEach(updatedDevice => {
+                const index = devices.findIndex(d => d.mac_address === updatedDevice.mac_address);
+                if (index !== -1) {
+                    devices[index] = updatedDevice;
+                }
+            });
+            const wasUpdated = renderDisplay();
+            if (wasUpdated) {
+                updateLastUpdate();
+            }
+        }
+        
+        // Determine if text should be light or dark based on background color
+        function getTextColor(backgroundColor) {
+            const hex = backgroundColor.replace('#', '');
+            const r = parseInt(hex.substr(0, 2), 16);
+            const g = parseInt(hex.substr(2, 2), 16);
+            const b = parseInt(hex.substr(4, 2), 16);
+            
+            // Calculate luminance
+            const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+            
+            return luminance > 0.5 ? 'dark-text' : 'light-text';
+        }
+        
+        // Get person icon/image
+        function getPersonIcon(device) {
+            if (device.image_path) {
+                return `<img src="/static/${device.image_path}" alt="${device.nickname}" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover; border: 4px solid rgba(255,255,255,0.8);">`;
+            }
+            return '👤';
+        }
+        
+        // Create a state signature to detect changes
+        function getDisplayState() {
+            const onlineDevices = devices.filter(d => d.is_online);
+            return {
+                count: onlineDevices.length,
+                devices: onlineDevices.map(d => ({
+                    mac: d.mac_address,
+                    nickname: d.nickname,
+                    color: d.color,
+                    image_path: d.image_path
+                })).sort((a, b) => a.mac.localeCompare(b.mac)) // Sort for consistent comparison
+            };
+        }
+        
+        // Check if display state has changed
+        function hasDisplayChanged() {
+            const currentState = getDisplayState();
+            if (!lastDisplayState) {
+                lastDisplayState = currentState;
+                return true;
+            }
+            
+            // Compare state
+            const hasChanged = JSON.stringify(currentState) !== JSON.stringify(lastDisplayState);
+            if (hasChanged) {
+                lastDisplayState = currentState;
+            }
+            return hasChanged;
+        }
+        
+        // Render the main display (only when needed)
+        function renderDisplay() {
+            // Only re-render if something actually changed
+            if (!hasDisplayChanged()) {
+                return false; // Return false to indicate no update happened
+            }
+            const mainDisplay = document.getElementById('mainDisplay');
+            const subtitle = document.getElementById('subtitle');
+            
+            // Filter online devices
+            const onlineDevices = devices.filter(d => d.is_online);
+            
+            if (onlineDevices.length === 0) {
+                // Show empty state
+                mainDisplay.innerHTML = `
+                    <div class="empty-state">
+                        <div class="icon">🏠</div>
+                        <h2>Nobody's Home</h2>
+                        <p>All tracked devices are currently offline</p>
+                    </div>
+                `;
+                subtitle.textContent = 'No one is currently home';
+            } else {
+                // Show online people
+                let html = '';
+                
+                onlineDevices.forEach((device, index) => {
+                    const textColorClass = getTextColor(device.color || '#007bff');
+                    const personIcon = getPersonIcon(device);
+                    
+                    html += `
+                        <div class="person-column animate-in" style="background-color: ${device.color || '#007bff'}">
+                            <div class="person-content ${textColorClass}">
+                                <div class="person-icon">
+                                    ${personIcon}
+                                </div>
+                                <div class="person-name">${device.nickname || 'Unknown Device'}</div>
+                                <div class="person-status">Currently Home</div>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                mainDisplay.innerHTML = html;
+                
+                // Update subtitle
+                const count = onlineDevices.length;
+                subtitle.textContent = `${count} ${count === 1 ? 'person is' : 'people are'} currently home`;
+            }
+            return true; // Return true to indicate update happened
+        }
+        
+        // Update last update time
+        function updateLastUpdate() {
+            const lastUpdate = document.getElementById('lastUpdate');
+            const now = new Date();
+            lastUpdate.textContent = `Last updated: ${now.toLocaleTimeString()}`;
+        }
+        
+        // Initialize the display
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeSocket();
+            
+            // Auto-refresh every 30 seconds
+            setInterval(loadDevices, 30000);
+            
+            // Update time every second
+            setInterval(updateLastUpdate, 1000);
+        });
+    </script>
+</body>
+</html>

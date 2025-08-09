@@ -1,0 +1,436 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Who's Home{% endblock %}
+
+{% block content %}
+<!-- Header Section -->
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-house-door"></i> Who's Home Dashboard</h2>
+    <button class="btn btn-primary" onclick="showDiscovery()">
+        <i class="bi bi-plus-circle"></i> Add Device
+    </button>
+</div>
+
+<!-- Status Summary -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="card-title">Online</h5>
+                        <h3 class="mb-0" id="onlineCount">0</h3>
+                    </div>
+                    <i class="bi bi-wifi text-white-50" style="font-size: 2rem;"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-danger text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="card-title">Offline</h5>
+                        <h3 class="mb-0" id="offlineCount">0</h3>
+                    </div>
+                    <i class="bi bi-wifi-off text-white-50" style="font-size: 2rem;"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-info text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="card-title">Total Devices</h5>
+                        <h3 class="mb-0" id="totalCount">0</h3>
+                    </div>
+                    <i class="bi bi-router text-white-50" style="font-size: 2rem;"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-warning text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="card-title">Last Scan</h5>
+                        <div class="mb-0" id="lastScan" style="font-size: 1.25rem; font-weight: 500; min-height: 2rem; display: flex; align-items: center;">Never</div>
+                    </div>
+                    <i class="bi bi-clock text-white-50" style="font-size: 2rem;"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tracked Devices -->
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">Tracked Devices</h5>
+        <div class="btn-group btn-group-sm">
+            <button class="btn btn-outline-secondary" onclick="refreshDevices()">
+                <i class="bi bi-arrow-clockwise"></i> Refresh
+            </button>
+        </div>
+    </div>
+    <div class="card-body" id="devicesList">
+        <div class="text-center text-muted">
+            <i class="bi bi-router" style="font-size: 3rem;"></i>
+            <p class="mt-2">No devices tracked yet.</p>
+            <button class="btn btn-primary" onclick="showDiscovery()">
+                <i class="bi bi-plus-circle"></i> Add Your First Device
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block page_init %}
+// Initialize dashboard
+initializeSocket();
+loadDevices();
+
+// Auto-refresh every 30 seconds
+setInterval(loadDevices, 30000);
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// Global variables
+let trackedDevices = [];
+
+// Load tracked devices
+function loadDevices() {
+    fetch('/api/devices')
+        .then(response => response.json())
+        .then(data => {
+            trackedDevices = data.devices;
+            displayDevices(trackedDevices);
+            updateSummary();
+            document.getElementById('lastScan').textContent = new Date().toLocaleTimeString();
+        })
+        .catch(error => {
+            console.error('Error loading devices:', error);
+            showToast('Error loading devices', 'error');
+        });
+}
+
+// Display devices in the dashboard
+function displayDevices(devices) {
+    const devicesList = document.getElementById('devicesList');
+    
+    if (devices.length === 0) {
+        devicesList.innerHTML = `
+            <div class="text-center text-muted">
+                <i class="bi bi-router" style="font-size: 3rem;"></i>
+                <p class="mt-2">No devices tracked yet.</p>
+                <button class="btn btn-primary" onclick="showDiscovery()">
+                    <i class="bi bi-plus-circle"></i> Add Your First Device
+                </button>
+            </div>
+        `;
+        return;
+    }
+    
+    let html = '<div class="row">';
+    
+    devices.forEach(device => {
+        const statusClass = device.is_online ? 'device-online' : 'device-offline';
+        const statusIcon = device.is_online ? 'status-online' : 'status-offline';
+        const statusText = device.is_online ? 'Online' : 'Offline';
+        const lastSeenText = device.last_seen ? 
+            new Date(device.last_seen).toLocaleString() : 'Never';
+        
+        html += `
+            <div class="col-md-6 col-lg-4 mb-3">
+                <div class="card device-card ${statusClass}">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div class="flex-grow-1">
+                                <h6 class="card-title d-flex align-items-center">
+                                    ${device.image_path ? 
+                                        `<img src="/static/${device.image_path}" alt="${device.nickname}" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover; margin-right: 8px; border: 2px solid ${device.color};">` : 
+                                        `<span class="color-preview" style="background-color: ${device.color}"></span>`
+                                    }
+                                    ${device.nickname || 'Unknown Device'}
+                                </h6>
+                                <p class="card-text">
+                                    <small class="text-muted">${device.mac_address}</small>
+                                </p>
+                                <div class="d-flex align-items-center">
+                                    <span class="status-indicator ${statusIcon}"></span>
+                                    <span class="fw-bold">${statusText}</span>
+                                </div>
+                                <div class="last-seen" style="min-height: 1.2rem;">
+                                    ${!device.is_online ? `Last seen: ${lastSeenText}` : ''}
+                                </div>
+                            </div>
+                            <div class="dropdown">
+                                <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="dropdown">
+                                    <i class="bi bi-three-dots-vertical"></i>
+                                </button>
+                                <ul class="dropdown-menu">
+                                    <li><a class="dropdown-item" href="#" onclick="editDevice('${device.mac_address}')">
+                                        <i class="bi bi-pencil"></i> Edit
+                                    </a></li>
+                                    <li><a class="dropdown-item text-danger" href="#" onclick="removeDevice('${device.mac_address}')">
+                                        <i class="bi bi-trash"></i> Remove
+                                    </a></li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+    
+    html += '</div>';
+    devicesList.innerHTML = html;
+}
+
+// Display discovered devices in modal
+function displayDiscoveredDevices(devices) {
+    const container = document.getElementById('discoveredDevices');
+    
+    if (devices.length === 0) {
+        container.innerHTML = `
+            <div class="col-12 text-center text-muted">
+                <i class="bi bi-exclamation-circle" style="font-size: 3rem;"></i>
+                <p class="mt-2">No devices found on the network.</p>
+                <p>Make sure devices are connected and try again.</p>
+            </div>
+        `;
+        return;
+    }
+    
+    let html = '';
+    
+    devices.forEach(device => {
+        const isAlreadyTracked = trackedDevices.some(d => d.mac_address === device.mac_address);
+        const buttonClass = isAlreadyTracked ? 'btn-secondary' : 'btn-outline-primary';
+        const buttonText = isAlreadyTracked ? 'Already Tracked' : 'Add Device';
+        const buttonDisabled = isAlreadyTracked ? 'disabled' : '';
+        
+        html += `
+            <div class="col-md-6 col-lg-4 mb-3">
+                <div class="card">
+                    <div class="card-body">
+                        <h6 class="card-title">${device.hostname || 'Unknown Device'}</h6>
+                        <p class="card-text">
+                            <small class="text-muted">IP: ${device.ip_address}</small><br>
+                            <small class="text-muted">MAC: ${device.mac_address || 'Unknown'}</small><br>
+                            <small class="text-muted">Method: ${device.discovery_method}</small>
+                        </p>
+                        <button class="btn btn-sm ${buttonClass}" ${buttonDisabled} 
+                                onclick="addDeviceToTracking('${device.mac_address}', '${device.hostname || ''}', '${device.ip_address}')">
+                            <i class="bi bi-plus"></i> ${buttonText}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+    
+    container.innerHTML = html;
+}
+
+// Add device to tracking
+function addDeviceToTracking(macAddress, hostname, ipAddress) {
+    if (!macAddress) {
+        showToast('Cannot track device without MAC address', 'error');
+        return;
+    }
+    
+    const colors = ['#007bff', '#28a745', '#dc3545', '#ffc107', '#17a2b8', '#6610f2', '#fd7e14', '#20c997'];
+    const randomColor = colors[Math.floor(Math.random() * colors.length)];
+    
+    fetch('/api/track_device', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            mac_address: macAddress,
+            nickname: hostname || `Device-${macAddress.slice(-5)}`,
+            color: randomColor
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast('Device added to tracking', 'success');
+            loadDevices();
+            bootstrap.Modal.getInstance(document.getElementById('discoveryModal')).hide();
+        } else {
+            showToast('Error adding device', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error adding device:', error);
+        showToast('Error adding device', 'error');
+    });
+}
+
+// Remove device from tracking
+function removeDevice(macAddress) {
+    if (!confirm('Are you sure you want to remove this device from tracking?')) {
+        return;
+    }
+    
+    fetch('/api/untrack_device', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({mac_address: macAddress})
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast('Device removed from tracking', 'success');
+            loadDevices();
+        } else {
+            showToast('Error removing device', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error removing device:', error);
+        showToast('Error removing device', 'error');
+    });
+}
+
+// Edit device
+function editDevice(macAddress) {
+    const device = trackedDevices.find(d => d.mac_address === macAddress);
+    if (!device) {
+        showToast('Device not found', 'error');
+        return;
+    }
+    
+    // Populate edit form
+    document.getElementById('editMacAddress').value = device.mac_address;
+    document.getElementById('editMacAddressDisplay').value = device.mac_address;
+    document.getElementById('editNickname').value = device.nickname || '';
+    document.getElementById('editColor').value = device.color || '#007bff';
+    document.getElementById('editColorPreview').style.backgroundColor = device.color || '#007bff';
+    
+    // Reset image upload
+    const imageInput = document.getElementById('editImage');
+    imageInput.value = '';
+    imageInput.removeAttribute('data-remove-image'); // Clear any previous remove flag
+    const preview = document.getElementById('editImagePreview');
+    const placeholder = document.getElementById('editImagePlaceholder');
+    const removeBtn = document.getElementById('removeImageBtn');
+    
+    if (device.image_path) {
+        preview.src = `/static/${device.image_path}`;
+        preview.style.display = 'block';
+        placeholder.style.display = 'none';
+        removeBtn.style.display = 'inline-block';
+    } else {
+        preview.style.display = 'none';
+        placeholder.style.display = 'flex';
+        removeBtn.style.display = 'none';
+    }
+    
+    // Show modal
+    const modal = new bootstrap.Modal(document.getElementById('editDeviceModal'));
+    modal.show();
+}
+
+// Save device edit
+function saveDeviceEdit() {
+    const macAddress = document.getElementById('editMacAddress').value;
+    const nickname = document.getElementById('editNickname').value.trim();
+    const color = document.getElementById('editColor').value;
+    const imageFile = document.getElementById('editImage').files[0];
+    const removeImage = document.getElementById('editImage').getAttribute('data-remove-image') === 'true';
+    
+    if (!nickname) {
+        showToast('Nickname is required', 'error');
+        return;
+    }
+    
+    // Create form data for file upload
+    const formData = new FormData();
+    formData.append('mac_address', macAddress);
+    formData.append('nickname', nickname);
+    formData.append('color', color);
+    if (imageFile) {
+        formData.append('image', imageFile);
+    }
+    if (removeImage) {
+        formData.append('remove_image', 'true');
+    }
+    
+    fetch('/api/update_device', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast('Device updated successfully', 'success');
+            loadDevices();
+            bootstrap.Modal.getInstance(document.getElementById('editDeviceModal')).hide();
+        } else {
+            showToast(data.error || 'Error updating device', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error updating device:', error);
+        showToast('Error updating device', 'error');
+    });
+}
+
+// Remove picture from device
+function removePicture() {
+    if (!confirm('Are you sure you want to remove this picture?')) {
+        return;
+    }
+    
+    // Reset UI to default state
+    const preview = document.getElementById('editImagePreview');
+    const placeholder = document.getElementById('editImagePlaceholder');
+    const removeBtn = document.getElementById('removeImageBtn');
+    
+    preview.style.display = 'none';
+    placeholder.style.display = 'flex';
+    removeBtn.style.display = 'none';
+    
+    // Mark for removal (we'll handle this in saveDeviceEdit)
+    document.getElementById('editImage').setAttribute('data-remove-image', 'true');
+}
+
+// Refresh devices
+function refreshDevices() {
+    loadDevices();
+    showToast('Devices refreshed', 'success');
+}
+
+// Update device status from real-time updates
+function updateDeviceStatus(updatedDevices) {
+    updatedDevices.forEach(updatedDevice => {
+        const index = trackedDevices.findIndex(d => d.mac_address === updatedDevice.mac_address);
+        if (index !== -1) {
+            trackedDevices[index] = updatedDevice;
+        }
+    });
+    
+    displayDevices(trackedDevices);
+    updateSummary();
+}
+
+// Update summary statistics
+function updateSummary() {
+    const onlineCount = trackedDevices.filter(d => d.is_online).length;
+    const offlineCount = trackedDevices.filter(d => !d.is_online).length;
+    const totalCount = trackedDevices.length;
+    
+    document.getElementById('onlineCount').textContent = onlineCount;
+    document.getElementById('offlineCount').textContent = offlineCount;
+    document.getElementById('totalCount').textContent = totalCount;
+}
+</script>
+{% endblock %}
