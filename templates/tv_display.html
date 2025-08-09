@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Who's Home - TV Display</title>
     
     <!-- Socket.IO -->
@@ -22,11 +22,21 @@
             overflow: hidden;
             display: flex;
             flex-direction: column;
+            /* Mobile optimizations */
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+            /* Improved font rendering on mobile */
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
         }
         
         .header {
             background: rgba(0, 0, 0, 0.2);
             padding: 20px;
+            padding-top: max(20px, env(safe-area-inset-top));
             text-align: center;
             backdrop-filter: blur(10px);
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
@@ -50,6 +60,8 @@
             flex: 1;
             display: flex;
             padding: 20px;
+            padding-left: max(20px, env(safe-area-inset-left));
+            padding-right: max(20px, env(safe-area-inset-right));
             gap: 20px;
             align-items: stretch;
         }
@@ -164,6 +176,7 @@
         .footer {
             background: rgba(0, 0, 0, 0.1);
             padding: 15px 20px;
+            padding-bottom: max(15px, env(safe-area-inset-bottom));
             text-align: center;
             backdrop-filter: blur(10px);
             border-top: 1px solid rgba(255, 255, 255, 0.1);
@@ -189,13 +202,156 @@
             .person-name { font-size: 2rem; }
             .person-status { font-size: 1.2rem; }
             .person-icon { width: 100px; height: 100px; font-size: 3rem; }
+            .person-content { padding: 30px; }
         }
         
-        @media (max-width: 800px) {
-            .main-display { flex-direction: column; }
-            .person-column { min-height: 200px; }
-            .person-name { font-size: 1.8rem; }
-            .header h1 { font-size: 2.5rem; }
+        @media (max-width: 992px) {
+            .header h1 { font-size: 2.8rem; }
+            .header .subtitle { font-size: 1.1rem; }
+            .person-name { font-size: 1.9rem; }
+            .person-status { font-size: 1.1rem; }
+            .person-icon { width: 90px; height: 90px; font-size: 2.8rem; }
+        }
+        
+        @media (max-width: 768px) {
+            .main-display { 
+                flex-direction: column; 
+                padding: 15px;
+                gap: 15px;
+            }
+            .person-column { 
+                min-height: 180px;
+                border-radius: 15px;
+            }
+            .person-content { padding: 25px 20px; }
+            .person-name { font-size: 1.7rem; }
+            .person-status { font-size: 1rem; }
+            .person-icon { 
+                width: 80px; 
+                height: 80px; 
+                font-size: 2.5rem;
+                margin-bottom: 20px;
+            }
+            .header h1 { font-size: 2.2rem; }
+            .header .subtitle { font-size: 1rem; }
+            .header { padding: 15px; }
+            .footer { padding: 12px 15px; }
+            .footer .last-update { font-size: 0.9rem; }
+            .empty-state .icon { font-size: 4rem; }
+            .empty-state h2 { font-size: 2rem; }
+            .empty-state p { font-size: 1.2rem; }
+        }
+        
+        @media (max-width: 480px) {
+            .person-column { 
+                min-height: 160px;
+                border-radius: 12px;
+            }
+            .person-content { padding: 20px 15px; }
+            .person-name { 
+                font-size: 1.5rem;
+                line-height: 1.2;
+                margin-bottom: 12px;
+            }
+            .person-status { font-size: 0.95rem; }
+            .person-icon { 
+                width: 70px; 
+                height: 70px; 
+                font-size: 2.2rem;
+                margin-bottom: 15px;
+            }
+            .header h1 { font-size: 1.8rem; }
+            .header .subtitle { font-size: 0.9rem; }
+            .header { padding: 12px; }
+            .main-display { padding: 12px; gap: 12px; }
+            .footer { padding: 10px 12px; }
+            .footer .last-update { font-size: 0.8rem; }
+            .empty-state { padding: 30px 20px; }
+            .empty-state .icon { font-size: 3.5rem; }
+            .empty-state h2 { font-size: 1.7rem; }
+            .empty-state p { font-size: 1.1rem; }
+        }
+        
+        @media (max-width: 360px) {
+            .person-name { font-size: 1.3rem; }
+            .person-status { font-size: 0.9rem; }
+            .person-icon { 
+                width: 60px; 
+                height: 60px; 
+                font-size: 2rem;
+                margin-bottom: 12px;
+            }
+            .header h1 { font-size: 1.6rem; }
+            .person-content { padding: 18px 12px; }
+            .empty-state h2 { font-size: 1.5rem; }
+            .empty-state p { font-size: 1rem; }
+        }
+        
+        /* Landscape orientation on mobile */
+        @media (max-width: 768px) and (orientation: landscape) {
+            .main-display { 
+                flex-direction: row;
+                padding: 10px;
+                gap: 10px;
+            }
+            .person-column { 
+                min-height: auto;
+                min-width: 150px;
+                flex: 1;
+            }
+            .person-content { padding: 15px 10px; }
+            .person-name { font-size: 1.4rem; }
+            .person-status { font-size: 0.9rem; }
+            .person-icon { 
+                width: 60px; 
+                height: 60px; 
+                font-size: 2rem;
+                margin-bottom: 10px;
+            }
+            .header { padding: 10px; }
+            .header h1 { font-size: 1.8rem; }
+            .header .subtitle { font-size: 0.9rem; }
+            .footer { padding: 8px 10px; }
+        }
+        
+        /* Performance optimizations for mobile */
+        @media (max-width: 768px) {
+            .person-column {
+                /* Reduce animations for better performance on mobile */
+                transition: transform 0.3s ease;
+                will-change: transform;
+            }
+            
+            .person-column:hover {
+                transform: none; /* Disable hover effects on mobile */
+            }
+            
+            /* Reduce backdrop-filter on low-end devices */
+            @supports not (backdrop-filter: blur(10px)) {
+                .header, .footer {
+                    backdrop-filter: none;
+                    background: rgba(0, 0, 0, 0.8);
+                }
+                .person-column {
+                    backdrop-filter: none;
+                }
+            }
+        }
+        
+        /* Reduced motion for accessibility and battery life */
+        @media (prefers-reduced-motion: reduce) {
+            .person-column {
+                transition: none;
+                animation: none;
+            }
+            
+            .person-column.animate-in {
+                animation: none;
+            }
+            
+            .person-icon {
+                animation: none;
+            }
         }
         
         /* Animation for new person appearing */
@@ -299,7 +455,7 @@
         // Get person icon/image
         function getPersonIcon(device) {
             if (device.image_path) {
-                return `<img src="/static/${device.image_path}" alt="${device.nickname}" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover; border: 4px solid rgba(255,255,255,0.8);">`;
+                return `<img src="/static/${device.image_path}" alt="${device.nickname}" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover; border: 4px solid rgba(255,255,255,0.8);" loading="lazy">`;
             }
             return '👤';
         }
