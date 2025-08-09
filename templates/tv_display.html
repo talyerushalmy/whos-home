@@ -18,8 +18,9 @@
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            height: 100vh;
-            overflow: hidden;
+            min-height: 100vh;
+            overflow-x: hidden;
+            overflow-y: auto;
             display: flex;
             flex-direction: column;
             /* Mobile optimizations */
@@ -27,7 +28,7 @@
             -webkit-user-select: none;
             user-select: none;
             -webkit-tap-highlight-color: transparent;
-            touch-action: manipulation;
+            touch-action: pan-y;
             /* Improved font rendering on mobile */
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
@@ -64,6 +65,7 @@
             padding-right: max(20px, env(safe-area-inset-right));
             gap: 20px;
             align-items: stretch;
+            min-height: 0;
         }
         
         .person-column {
@@ -214,10 +216,19 @@
         }
         
         @media (max-width: 768px) {
+            body {
+                /* Ensure smooth scrolling on mobile */
+                -webkit-overflow-scrolling: touch;
+                scroll-behavior: smooth;
+            }
+            
             .main-display { 
                 flex-direction: column; 
                 padding: 15px;
                 gap: 15px;
+                /* Allow content to expand naturally for scrolling */
+                flex: none;
+                min-height: calc(100vh - 200px);
             }
             .person-column { 
                 min-height: 180px;
@@ -293,6 +304,9 @@
                 flex-direction: row;
                 padding: 10px;
                 gap: 10px;
+                overflow-x: auto;
+                flex: 1;
+                min-height: 0;
             }
             .person-column { 
                 min-height: auto;
