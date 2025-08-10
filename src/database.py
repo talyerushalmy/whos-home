@@ -16,6 +16,7 @@ class DatabaseManager:
     def __init__(self, db_path='data/whos_home.db'):
         self.db_path = db_path
         self.lock = threading.Lock()
+        self.current_version = 3  # Current database schema version
         
         # Ensure data directory exists
         os.makedirs(os.path.dirname(db_path), exist_ok=True)
@@ -26,101 +27,244 @@ class DatabaseManager:
         conn.row_factory = sqlite3.Row
         return conn
     
+    def get_database_version(self):
+        """Get current database version"""
+        conn = self.get_connection()
+        try:
+            cursor = conn.cursor()
+            
+            # Check if migrations table exists
+            cursor.execute("""
+                SELECT name FROM sqlite_master 
+                WHERE type='table' AND name='migrations'
+            """)
+            
+            if not cursor.fetchone():
+                return 0  # No migrations table means version 0
+            
+            # Get the latest migration version
+            cursor.execute("""
+                SELECT version FROM migrations 
+                ORDER BY version DESC 
+                LIMIT 1
+            """)
+            
+            result = cursor.fetchone()
+            return result[0] if result else 0
+            
+        except Exception as e:
+            logger.error(f"Error getting database version: {e}")
+            return 0
+        finally:
+            conn.close()
+    
+    def record_migration(self, version, description):
+        """Record a successful migration"""
+        conn = self.get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO migrations (version, description, applied_at)
+                VALUES (?, ?, CURRENT_TIMESTAMP)
+            """, (version, description))
+            conn.commit()
+            logger.info(f"Recorded migration v{version}: {description}")
+        except Exception as e:
+            logger.error(f"Error recording migration: {e}")
+            raise
+        finally:
+            conn.close()
+    
+    def create_migrations_table(self):
+        """Create the migrations tracking table"""
+        conn = self.get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS migrations (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    version INTEGER NOT NULL,
+                    description TEXT NOT NULL,
+                    applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.commit()
+            logger.info("Created migrations table")
+        except Exception as e:
+            logger.error(f"Error creating migrations table: {e}")
+            raise
+        finally:
+            conn.close()
+    
+    def migrate_to_version_1(self):
+        """Initial schema creation"""
+        conn = self.get_connection()
+        try:
+            cursor = conn.cursor()
+            
+            # Create users table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    username TEXT UNIQUE NOT NULL,
+                    password_hash TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            
+            # Create tracked_devices table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS tracked_devices (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    mac_address TEXT UNIQUE NOT NULL,
+                    nickname TEXT,
+                    color TEXT DEFAULT '#007bff',
+                    is_online BOOLEAN DEFAULT FALSE,
+                    last_seen TIMESTAMP,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            
+            # Create settings table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS settings (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            
+            # Create discovery_log table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS discovery_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    mac_address TEXT,
+                    ip_address TEXT,
+                    method TEXT,
+                    success BOOLEAN,
+                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            
+            # Insert default settings
+            default_settings = {
+                'scan_interval': '30',
+                'discovery_methods': '["ping", "arping"]',
+                'network_range': 'auto',
+                'ping_timeout': '1',
+                'arping_timeout': '2'
+            }
+            
+            for key, value in default_settings.items():
+                cursor.execute("""
+                    INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)
+                """, (key, value))
+            
+            # Create default admin user
+            cursor.execute('SELECT COUNT(*) FROM users')
+            if cursor.fetchone()[0] == 0:
+                from .auth import AuthManager
+                auth_manager = AuthManager(None)
+                password_hash = auth_manager.hash_password('admin')
+                cursor.execute("""
+                    INSERT INTO users (username, password_hash) VALUES (?, ?)
+                """, ('admin', password_hash))
+                logger.info("Created default admin user (username: admin, password: admin)")
+            
+            conn.commit()
+            logger.info("Migration to version 1 completed")
+            
+        except Exception as e:
+            conn.rollback()
+            logger.error(f"Error in migration to version 1: {e}")
+            raise
+        finally:
+            conn.close()
+    
+    def migrate_to_version_2(self):
+        """Add image_path column to tracked_devices"""
+        conn = self.get_connection()
+        try:
+            cursor = conn.cursor()
+            
+            # Check if image_path column exists
+            cursor.execute("PRAGMA table_info(tracked_devices)")
+            columns = [column[1] for column in cursor.fetchall()]
+            
+            if 'image_path' not in columns:
+                cursor.execute('ALTER TABLE tracked_devices ADD COLUMN image_path TEXT')
+                logger.info("Added image_path column to tracked_devices table")
+            
+            conn.commit()
+            logger.info("Migration to version 2 completed")
+            
+        except Exception as e:
+            conn.rollback()
+            logger.error(f"Error in migration to version 2: {e}")
+            raise
+        finally:
+            conn.close()
+    
+    def migrate_to_version_3(self):
+        """Add TV display public setting"""
+        conn = self.get_connection()
+        try:
+            cursor = conn.cursor()
+            
+            # Add TV display public setting if it doesn't exist
+            cursor.execute("""
+                INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)
+            """, ('tv_display_public', 'true'))
+            
+            conn.commit()
+            logger.info("Migration to version 3 completed")
+            
+        except Exception as e:
+            conn.rollback()
+            logger.error(f"Error in migration to version 3: {e}")
+            raise
+        finally:
+            conn.close()
+    
+    def run_migrations(self):
+        """Run all pending migrations"""
+        current_version = self.get_database_version()
+        
+        if current_version == 0:
+            # First time setup - create migrations table
+            self.create_migrations_table()
+            self.migrate_to_version_1()
+            self.record_migration(1, "Initial schema creation")
+            current_version = 1
+        
+        # Run migrations in order
+        migrations = [
+            (2, "Add image_path column", self.migrate_to_version_2),
+            (3, "Add TV display public setting", self.migrate_to_version_3),
+        ]
+        
+        for version, description, migration_func in migrations:
+            if current_version < version:
+                logger.info(f"Running migration to version {version}: {description}")
+                migration_func()
+                self.record_migration(version, description)
+                current_version = version
+        
+        if current_version == self.current_version:
+            logger.info(f"Database is up to date (version {current_version})")
+        else:
+            logger.info(f"Database migrated from version {self.get_database_version()} to {self.current_version}")
+    
     def initialize(self):
-        """Initialize database schema"""
+        """Initialize database schema with migrations"""
         with self.lock:
-            conn = self.get_connection()
             try:
-                cursor = conn.cursor()
-                
-                # Create users table
-                cursor.execute('''
-                    CREATE TABLE IF NOT EXISTS users (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        username TEXT UNIQUE NOT NULL,
-                        password_hash TEXT NOT NULL,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )
-                ''')
-                
-                # Create tracked_devices table
-                cursor.execute('''
-                    CREATE TABLE IF NOT EXISTS tracked_devices (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        mac_address TEXT UNIQUE NOT NULL,
-                        nickname TEXT,
-                        color TEXT DEFAULT '#007bff',
-                        image_path TEXT,
-                        is_online BOOLEAN DEFAULT FALSE,
-                        last_seen TIMESTAMP,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )
-                ''')
-                
-                # Create settings table
-                cursor.execute('''
-                    CREATE TABLE IF NOT EXISTS settings (
-                        key TEXT PRIMARY KEY,
-                        value TEXT NOT NULL,
-                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )
-                ''')
-                
-                # Create discovery_log table for debugging
-                cursor.execute('''
-                    CREATE TABLE IF NOT EXISTS discovery_log (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        mac_address TEXT,
-                        ip_address TEXT,
-                        method TEXT,
-                        success BOOLEAN,
-                        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )
-                ''')
-                
-                # Insert default settings if not exists
-                default_settings = {
-                    'scan_interval': '30',
-                    'discovery_methods': '["ping", "arping"]',
-                    'network_range': 'auto',
-                    'ping_timeout': '1',
-                    'arping_timeout': '2',
-                    'tv_display_public': 'true'
-                }
-                
-                for key, value in default_settings.items():
-                    cursor.execute('''
-                        INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)
-                    ''', (key, value))
-                
-                # Check if image_path column exists and add it if not (migration)
-                cursor.execute("PRAGMA table_info(tracked_devices)")
-                columns = [column[1] for column in cursor.fetchall()]
-                if 'image_path' not in columns:
-                    cursor.execute('ALTER TABLE tracked_devices ADD COLUMN image_path TEXT')
-                    logger.info("Added image_path column to tracked_devices table")
-                
-                # Create default admin user if no users exist
-                cursor.execute('SELECT COUNT(*) FROM users')
-                if cursor.fetchone()[0] == 0:
-                    from .auth import AuthManager
-                    auth_manager = AuthManager(None)
-                    password_hash = auth_manager.hash_password('admin')
-                    cursor.execute('''
-                        INSERT INTO users (username, password_hash) VALUES (?, ?)
-                    ''', ('admin', password_hash))
-                    logger.info("Created default admin user (username: admin, password: admin)")
-                
-                conn.commit()
-                logger.info("Database schema initialized successfully")
-                
+                self.run_migrations()
+                logger.info("Database initialization completed successfully")
             except Exception as e:
-                conn.rollback()
                 logger.error(f"Error initializing database: {e}")
                 raise
-            finally:
-                conn.close()
     
     def add_tracked_device(self, mac_address, nickname=None, color='#007bff'):
         """Add a device to the tracking list"""
@@ -328,3 +472,169 @@ class DatabaseManager:
             return dict(row) if row else None
         finally:
             conn.close()
+    
+    def get_migration_history(self):
+        """Get migration history for debugging"""
+        conn = self.get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT version, description, applied_at 
+                FROM migrations 
+                ORDER BY version
+            """)
+            
+            migrations = []
+            for row in cursor.fetchall():
+                migrations.append({
+                    'version': row['version'],
+                    'description': row['description'],
+                    'applied_at': row['applied_at']
+                })
+            
+            return migrations
+        finally:
+            conn.close()
+    
+    def backup_database(self, backup_path=None):
+        """Create a backup of the database"""
+        if backup_path is None:
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            backup_path = f"{self.db_path}.backup_{timestamp}"
+        
+        import shutil
+        try:
+            shutil.copy2(self.db_path, backup_path)
+            logger.info(f"Database backed up to: {backup_path}")
+            return backup_path
+        except Exception as e:
+            logger.error(f"Error backing up database: {e}")
+            raise
+    
+    def restore_database(self, backup_path):
+        """Restore database from backup"""
+        import shutil
+        try:
+            # Create a backup of current database before restore
+            current_backup = self.backup_database()
+            logger.info(f"Current database backed up to: {current_backup}")
+            
+            # Restore from backup
+            shutil.copy2(backup_path, self.db_path)
+            logger.info(f"Database restored from: {backup_path}")
+            
+            return True
+        except Exception as e:
+            logger.error(f"Error restoring database: {e}")
+            raise
+    
+    def export_data(self, export_path):
+        """Export database data to JSON for backup/migration"""
+        try:
+            data = {
+                'version': self.get_database_version(),
+                'exported_at': datetime.now().isoformat(),
+                'users': [],
+                'tracked_devices': [],
+                'settings': {},
+                'migrations': []
+            }
+            
+            conn = self.get_connection()
+            try:
+                cursor = conn.cursor()
+                
+                # Export users
+                cursor.execute('SELECT * FROM users')
+                for row in cursor.fetchall():
+                    data['users'].append(dict(row))
+                
+                # Export tracked devices
+                cursor.execute('SELECT * FROM tracked_devices')
+                for row in cursor.fetchall():
+                    data['tracked_devices'].append(dict(row))
+                
+                # Export settings
+                cursor.execute('SELECT * FROM settings')
+                for row in cursor.fetchall():
+                    data['settings'][row['key']] = row['value']
+                
+                # Export migrations
+                cursor.execute('SELECT * FROM migrations')
+                for row in cursor.fetchall():
+                    data['migrations'].append(dict(row))
+                
+            finally:
+                conn.close()
+            
+            # Write to file
+            with open(export_path, 'w') as f:
+                json.dump(data, f, indent=2, default=str)
+            
+            logger.info(f"Database exported to: {export_path}")
+            return export_path
+            
+        except Exception as e:
+            logger.error(f"Error exporting database: {e}")
+            raise
+    
+    def import_data(self, import_path):
+        """Import database data from JSON backup"""
+        try:
+            with open(import_path, 'r') as f:
+                data = json.load(f)
+            
+            conn = self.get_connection()
+            try:
+                cursor = conn.cursor()
+                
+                # Clear existing data
+                cursor.execute('DELETE FROM users')
+                cursor.execute('DELETE FROM tracked_devices')
+                cursor.execute('DELETE FROM settings')
+                cursor.execute('DELETE FROM migrations')
+                
+                # Import users
+                for user in data.get('users', []):
+                    cursor.execute("""
+                        INSERT INTO users (username, password_hash, created_at)
+                        VALUES (?, ?, ?)
+                    """, (user['username'], user['password_hash'], user['created_at']))
+                
+                # Import tracked devices
+                for device in data.get('tracked_devices', []):
+                    cursor.execute("""
+                        INSERT INTO tracked_devices 
+                        (mac_address, nickname, color, image_path, is_online, last_seen, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        device['mac_address'], device['nickname'], device['color'],
+                        device.get('image_path'), device['is_online'], device['last_seen'],
+                        device['created_at'], device['updated_at']
+                    ))
+                
+                # Import settings
+                for key, value in data.get('settings', {}).items():
+                    cursor.execute("""
+                        INSERT INTO settings (key, value, updated_at)
+                        VALUES (?, ?, CURRENT_TIMESTAMP)
+                    """, (key, value))
+                
+                # Import migrations
+                for migration in data.get('migrations', []):
+                    cursor.execute("""
+                        INSERT INTO migrations (version, description, applied_at)
+                        VALUES (?, ?, ?)
+                    """, (migration['version'], migration['description'], migration['applied_at']))
+                
+                conn.commit()
+                logger.info(f"Database imported from: {import_path}")
+                
+            finally:
+                conn.close()
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error importing database: {e}")
+            raise

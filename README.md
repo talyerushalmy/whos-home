@@ -238,13 +238,65 @@ sudo chown -R whos-home:whos-home /opt/whos-home
 - Normal on some networks, devices will still be tracked by IP
 - Ensure the computer is on the same LAN segment
 
-### Database Issues
+### Database Management
 
-Reset database (will lose all data):
+The application includes a comprehensive database migration system that automatically updates your database schema when you update the application.
+
+#### Automatic Migrations
+
+- **Seamless updates**: Your data is preserved when updating the application
+- **Version tracking**: Database schema version is tracked and updated automatically
+- **Safe migrations**: Each migration is tested and applied safely
+
+#### Manual Database Operations
+
+Use the built-in database management tool:
+
 ```bash
+# Check database status
+python manage_db.py status
+
+# Create a backup
+python manage_db.py backup
+
+# Export data to JSON
+python manage_db.py export
+
+# Run migrations manually
+python manage_db.py migrate
+
+# Reset database (WARNING: deletes all data)
+python manage_db.py reset --confirm
+```
+
+#### Web Interface
+
+Access database management through the Settings page:
+- **Database Status**: View current version and migration history
+- **Create Backup**: Generate database backup files
+- **Export Data**: Export to JSON format for portability
+
+#### Database Issues
+
+**Reset database (will lose all data):**
+```bash
+# Using the management tool (recommended)
+python manage_db.py reset --confirm
+
+# Manual reset
 sudo systemctl stop whos-home
 sudo rm /opt/whos-home/data/whos_home.db
 sudo systemctl start whos-home
+```
+
+**Backup before updates:**
+```bash
+# Create backup before updating
+python manage_db.py backup
+
+# Update application
+git pull
+sudo systemctl restart whos-home
 ```
 
 ## File Structure
@@ -282,6 +334,9 @@ whos-home/
 - `POST /api/untrack_device` - Remove device from tracking
 - `GET /api/settings` - Get settings
 - `POST /api/settings` - Update settings
+- `GET /api/database/status` - Get database status and migration info
+- `POST /api/database/backup` - Create database backup
+- `POST /api/database/export` - Export database to JSON
 
 ## Contributing
 

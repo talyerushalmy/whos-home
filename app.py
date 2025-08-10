@@ -254,6 +254,63 @@ def update_settings():
     device_discovery.update_settings(data)
     return jsonify({'success': True})
 
+@app.route('/api/database/status')
+def database_status():
+    """Get database status and migration information"""
+    if not session.get('logged_in'):
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    try:
+        current_version = db_manager.get_database_version()
+        migration_history = db_manager.get_migration_history()
+        
+        return jsonify({
+            'current_version': current_version,
+            'latest_version': db_manager.current_version,
+            'migration_history': migration_history,
+            'needs_migration': current_version < db_manager.current_version
+        })
+    except Exception as e:
+        logger.error(f"Error getting database status: {e}")
+        return jsonify({'error': 'Failed to get database status'}), 500
+
+@app.route('/api/database/backup', methods=['POST'])
+def backup_database():
+    """Create a database backup"""
+    if not session.get('logged_in'):
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    try:
+        backup_path = db_manager.backup_database()
+        return jsonify({
+            'success': True,
+            'backup_path': backup_path,
+            'message': 'Database backup created successfully'
+        })
+    except Exception as e:
+        logger.error(f"Error creating backup: {e}")
+        return jsonify({'error': 'Failed to create backup'}), 500
+
+@app.route('/api/database/export', methods=['POST'])
+def export_database():
+    """Export database to JSON"""
+    if not session.get('logged_in'):
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    try:
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        export_path = f"data/export_{timestamp}.json"
+        export_path = db_manager.export_data(export_path)
+        
+        return jsonify({
+            'success': True,
+            'export_path': export_path,
+            'message': 'Database exported successfully'
+        })
+    except Exception as e:
+        logger.error(f"Error exporting database: {e}")
+        return jsonify({'error': 'Failed to export database'}), 500
+
 def discovery_worker():
     """Background worker for device discovery"""
     global discovery_running

@@ -174,6 +174,42 @@
                                 </div>
                             </div>
                         </div>
+                        
+                        <div class="settings-section">
+                            <h6 class="mb-3">Database Management</h6>
+                            
+                            <div class="mb-3">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <strong>Database Version</strong>
+                                        <div class="form-text" id="dbVersionInfo">Loading...</div>
+                                    </div>
+                                    <button type="button" class="btn btn-sm btn-outline-info" onclick="checkDatabaseStatus()">
+                                        <i class="bi bi-arrow-clockwise"></i> Refresh
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <button type="button" class="btn btn-outline-primary w-100" onclick="createBackup()">
+                                        <i class="bi bi-download"></i> Create Backup
+                                    </button>
+                                    <div class="form-text">Create a database backup file</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <button type="button" class="btn btn-outline-success w-100" onclick="exportDatabase()">
+                                        <i class="bi bi-file-earmark-json"></i> Export Data
+                                    </button>
+                                    <div class="form-text">Export data to JSON format</div>
+                                </div>
+                            </div>
+                            
+                            <div class="alert alert-info" id="dbStatusAlert" style="display: none;">
+                                <i class="bi bi-info-circle"></i>
+                                <span id="dbStatusMessage"></span>
+                            </div>
+                        </div>
                     </form>
                 </div>
                 <div class="modal-footer">
@@ -340,8 +376,86 @@
         // Show settings modal
         function showSettings() {
             loadSettings();
+            checkDatabaseStatus();
             const modal = new bootstrap.Modal(document.getElementById('settingsModal'));
             modal.show();
+        }
+        
+        // Check database status
+        function checkDatabaseStatus() {
+            fetch('/api/database/status')
+                .then(response => response.json())
+                .then(data => {
+                    const versionInfo = document.getElementById('dbVersionInfo');
+                    const statusAlert = document.getElementById('dbStatusAlert');
+                    const statusMessage = document.getElementById('dbStatusMessage');
+                    
+                    versionInfo.textContent = `v${data.current_version} / v${data.latest_version}`;
+                    
+                    if (data.needs_migration) {
+                        statusAlert.className = 'alert alert-warning';
+                        statusMessage.innerHTML = '<strong>Database update available!</strong> The application will automatically migrate your database when you restart it.';
+                        statusAlert.style.display = 'block';
+                    } else if (data.current_version === data.latest_version) {
+                        statusAlert.className = 'alert alert-success';
+                        statusMessage.innerHTML = '<strong>Database is up to date!</strong> All migrations have been applied successfully.';
+                        statusAlert.style.display = 'block';
+                    } else {
+                        statusAlert.style.display = 'none';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error checking database status:', error);
+                    document.getElementById('dbVersionInfo').textContent = 'Error loading status';
+                });
+        }
+        
+        // Create database backup
+        function createBackup() {
+            if (!confirm('Create a database backup? This will create a backup file in the data directory.')) {
+                return;
+            }
+            
+            fetch('/api/database/backup', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'}
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showToast(`Backup created: ${data.backup_path}`, 'success');
+                } else {
+                    showToast('Failed to create backup', 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error creating backup:', error);
+                showToast('Error creating backup', 'error');
+            });
+        }
+        
+        // Export database to JSON
+        function exportDatabase() {
+            if (!confirm('Export database to JSON? This will create an export file in the data directory.')) {
+                return;
+            }
+            
+            fetch('/api/database/export', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'}
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showToast(`Database exported: ${data.export_path}`, 'success');
+                } else {
+                    showToast('Failed to export database', 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error exporting database:', error);
+                showToast('Error exporting database', 'error');
+            });
         }
         
         // Save settings
