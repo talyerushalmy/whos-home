@@ -299,6 +299,42 @@ git pull
 sudo systemctl restart whos-home
 ```
 
+### Updating the Application
+
+#### For `/opt/whos-home` Installations
+
+If you installed using `./install.sh` to `/opt/whos-home`, use the update script:
+
+```bash
+# Pull latest changes
+git pull
+
+# Run the update script (preserves your data)
+sudo ./update.sh
+```
+
+The update script will:
+- Stop the service
+- Create automatic backups of your installation and database
+- Update application files
+- Update Python dependencies
+- Run database migrations automatically
+- Restart the service
+
+#### For Manual Installations
+
+```bash
+# Pull latest changes
+git pull
+
+# Update dependencies
+source venv/bin/activate
+pip install -r requirements.txt
+
+# Restart the application
+# (The database migrations will run automatically on startup)
+```
+
 ## File Structure
 
 ```
