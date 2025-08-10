@@ -78,6 +78,18 @@ def index():
 @app.route('/tv')
 def tv_display():
     """TV display route - shows who's home in full screen"""
+    # Check if TV display requires authentication
+    settings = db_manager.get_settings()
+    tv_display_public = settings.get('tv_display_public', True)
+    
+    # Convert string to boolean if needed
+    if isinstance(tv_display_public, str):
+        tv_display_public = tv_display_public.lower() == 'true'
+    
+    # Require authentication if TV display is not public
+    if not tv_display_public and not session.get('logged_in'):
+        return redirect(url_for('login'))
+    
     return render_template('tv_display.html')
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -105,7 +117,16 @@ def logout():
 @app.route('/api/devices')
 def get_devices():
     """Get all tracked devices with their status"""
-    if not session.get('logged_in'):
+    # Check if TV display requires authentication
+    settings = db_manager.get_settings()
+    tv_display_public = settings.get('tv_display_public', True)
+    
+    # Convert string to boolean if needed
+    if isinstance(tv_display_public, str):
+        tv_display_public = tv_display_public.lower() == 'true'
+    
+    # Require authentication if TV display is not public
+    if not tv_display_public and not session.get('logged_in'):
         return jsonify({'error': 'Not authenticated'}), 401
     
     devices = db_manager.get_tracked_devices()

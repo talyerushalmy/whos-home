@@ -152,6 +152,7 @@ Access via the gear icon in the dashboard:
 - **Network Range**: IP range to scan (auto-detected or manual)
 - **Discovery Methods**: Choose ping, ARP ping, or both
 - **Timeouts**: Adjust ping and ARP timeouts for your network
+- **TV Display Access**: Choose whether the TV display requires authentication or is publicly accessible
 
 ### TV Display Mode
 
@@ -162,6 +163,7 @@ Perfect for wall-mounted displays or tablets:
 - **Real-time updates** - automatically refreshes as people come/go
 - **Color-coded** - each person shown in their chosen color
 - **Smart text contrast** - readable on any background color
+- **Configurable access**: Choose between public access or authentication required in Settings
 - **Access**: Click "TV Display" in navigation or visit `/tv`
 
 ## Service Management
@@ -268,7 +270,8 @@ whos-home/
 ## API Endpoints
 
 - `GET /` - Dashboard (requires auth)
-- `GET /tv` - TV display mode (no auth required)
+- `GET /tv` - TV display mode (auth configurable via settings)
+- `GET /api/devices` - Get tracked devices (auth configurable via settings)
 - `GET /login` - Login page
 - `POST /login` - Authenticate user
 - `GET /logout` - Logout

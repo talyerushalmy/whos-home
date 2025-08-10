@@ -85,7 +85,8 @@ class DatabaseManager:
                     'discovery_methods': '["ping", "arping"]',
                     'network_range': 'auto',
                     'ping_timeout': '1',
-                    'arping_timeout': '2'
+                    'arping_timeout': '2',
+                    'tv_display_public': 'true'
                 }
                 
                 for key, value in default_settings.items():

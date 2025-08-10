@@ -157,6 +157,23 @@
                                 </div>
                             </div>
                         </div>
+                        
+                        <div class="settings-section">
+                            <h6 class="mb-3">TV Display Settings</h6>
+                            
+                            <div class="mb-3">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="tv_display_public" checked>
+                                    <label class="form-check-label" for="tv_display_public">
+                                        <strong>Public TV Display Access</strong>
+                                    </label>
+                                    <div class="form-text">
+                                        When enabled, anyone can access the TV display without logging in. 
+                                        When disabled, authentication is required to view the TV display.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </form>
                 </div>
                 <div class="modal-footer">
@@ -310,6 +327,14 @@
             const methods = currentSettings.discovery_methods || ['ping', 'arping'];
             document.getElementById('method_ping').checked = methods.includes('ping');
             document.getElementById('method_arping').checked = methods.includes('arping');
+            
+            // TV display accessibility setting
+            const tvDisplayPublic = currentSettings.tv_display_public;
+            if (typeof tvDisplayPublic === 'string') {
+                document.getElementById('tv_display_public').checked = tvDisplayPublic.toLowerCase() === 'true';
+            } else {
+                document.getElementById('tv_display_public').checked = tvDisplayPublic !== false;
+            }
         }
         
         // Show settings modal
@@ -330,7 +355,8 @@
                 network_range: document.getElementById('network_range').value,
                 ping_timeout: parseFloat(document.getElementById('ping_timeout').value),
                 arping_timeout: parseFloat(document.getElementById('arping_timeout').value),
-                discovery_methods: methods
+                discovery_methods: methods,
+                tv_display_public: document.getElementById('tv_display_public').checked
             };
             
             fetch('/api/settings', {
